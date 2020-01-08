@@ -13,6 +13,12 @@ URL = 'https://citytech-health-atlas-data-prod.s3.amazonaws.com/uploads/uploader
 url = 'https://data.cityofchicago.org/api/views/kn9c-c2s2/rows.csv?accessType=DOWNLOAD' 
 filemane = 'Chicago_SES.csv'
 
+URLS = [('https://data.cityofchicago.org/api/views/kn9c-c2s2/rows.csv?accessType=DOWNLOAD', 'Chicago_SES.csv'), 
+        ('https://citytech-health-atlas-data-prod.s3.amazonaws.com/uploads/uploader/path/721/Green_Index__Land_Cover___Ave_Annual__v2.xlsx', 'Chicago_Green.xls'),
+        ('https://data.cityofchicago.org/api/views/j6cj-r444/rows.csv?accessType=DOWNLOAD', 'Chicago_Death.csv'),
+        ('https://data.cityofchicago.org/api/views/cjg8-dbka/rows.csv?accessType=DOWNLOAD', 'Chicago_health_cr.csv')]
+
+
 def download_data(url, filename):
     response = requests.get(url)
     if filename.endswith('.csv'):
@@ -49,10 +55,17 @@ def read_data(path, filename):
 
 #call
 pop_df = read_data(PATH, 'community_area_population.xls')
-df = read_data(PATH, filemane)
+#df = read_data(PATH, filemane)
 
-def parse_pop(pop_df):
-    
+def parse_pop(pop_df, date_range):
+   df = pop_df[pop_df['Year'] == date_range]
+   return df
+
+df = parse_pop(pop_df, '2011-2015')
+
+df.columns
+#of interest: Geo_Group, Number
+
 
 
 
@@ -70,30 +83,36 @@ def parse_death(death_df):
     return avg_an_death
 
 #get a count of healthcare centers per community area:
+#'Community Areas' is now "Community Area (#)" and formatting is not ideal
 def parse_healthcr(healthcr_df):
     healthcr_df['count_of_health_crs'] = 1 
-    count_of_crs = healthcr_df.groupby('Community Areas').sum().reset_index()
+    count_of_crs = healthcr_df.groupby('Community Area (#)').sum().reset_index()
+    
+    #df[['First','Last']] = df.Name.str.split(expand=True)
     return count_of_crs
 
 #Merge datasets:
-def merge_dfs(SES_df,green_df,avg_an_death,count_of_crs):     
+#updated to have pop -not tested
+def merge_dfs(SES_df,green_df,avg_an_death,count_of_crs, pop):     
     SES_green = SES_df.merge(green_df, left_on='Community Area Number', right_on = 'Geo_ID', how = 'inner')
 
     SES_green_death = SES_green.merge(avg_an_death, on='Community Area Number', how = 'inner')
 
+    #need to update, 'Community Area (#)' is the new column!
     SES_green_death_healthcr = SES_green_death.merge(count_of_crs, left_on='Community Area Number', 
                                                      right_on='Community Areas', how = 'outer')
+    SES_green_death_healthcr_pop = SES_green_death_healthcr.merge(pop, on = 'Geo_Group', how = 'outer')
     #fill in Nan with 0 (bc if not in the previous database then doesn't have a health center)
-    SES_green_death_healthcr['count_of_health_crs'].fillna(value = 0, inplace=True)
+    SES_green_death_healthcr_pop['count_of_health_crs'].fillna(value = 0, inplace=True)
     
     #drop colums with Nan (all cols dropped for this df are completely empty)
-    SES_green_death_healthcr.dropna(axis=1,inplace=True)
+    SES_green_death_healthcr_pop.dropna(axis=1,inplace=True)
 
     #drop columns that do not provide useful information/may not apply to all entries in the row after 
     # the merge (e.g. SubCategory or Map_Key from green_df), or duplicates eg Geo_ID
-    SES_green_death_healthcr.drop(columns = ['Geo_Group', 'Geo_ID', 'Category', 'SubCategory',
+    SES_green_death_healthcr_pop.drop(columns = ['Geo_Group', 'Geo_ID', 'Category', 'SubCategory',
                                             'Geography', 'Map_Key'], inplace = True)
-    return SES_green_death_healthcr 
+    return SES_green_death_healthcr_pop 
 
 #cite: https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.fillna.html
 
@@ -108,3 +127,28 @@ def drop_col(full_df):
                         'Firearm-related', 'Kidney disease (nephritis, nephrotic syndrome and nephrosis)', 
                         'Liver disease and cirrhosis', 'Lung cancer', 'Indicator'])
     return use_df
+
+
+#call the download funtion
+for url, filename in URLS:
+    download_data(url, filename)
+
+def main():
+    df_contents = []
+    for url, filename in URLS:
+        df = read_data(PATH, filename)
+        if filename == 'Chicago_Death.csv':
+            df_contents.append(parse_death(df))
+        elif filename == 'Chicago_health_cr.csv':
+            df_contents.append(parse_healthcr(df))
+        else:
+            df_contents.append(df) 
+    df_contents.append(parse_pop(pop_df))
+    #call the merge function
+    full_df= merge_dfs(df_contents[0], df_contents[1], df_contents[2], df_contents[3])
+    #call the drop_col function -> generate primary df
+    use_df = drop_col(full_df)
+    use_df = re_name(use_df)
+    return use_df
+
+use_df = main()
