@@ -87,9 +87,19 @@ def parse_death(death_df):
 def parse_healthcr(healthcr_df):
     healthcr_df['count_of_health_crs'] = 1 
     count_of_crs = healthcr_df.groupby('Community Area (#)').sum().reset_index()
+    #count_of_crs.rename(columns = {'Community Area (#)':'CA'}, inplace = True)
+    count_of_crs[['Community Area', 'Community Area Number']] = count_of_crs['Community Area (#)'].apply( 
+   lambda x: pd.Series(str(x).split("(")))
+    count_of_crs['Community Area Number'] = count_of_crs['Community Area Number'].apply(lambda x: pd.Series(str(x).strip(")")))
+    count_of_crs['Community Area Number'] = count_of_crs['Community Area Number'].apply(lambda x: pd.Series(str(x).strip(" )")))
+    count_of_crs['Community Area Number'] = count_of_crs['Community Area Number'].apply(lambda x: pd.Series(float(x)))
     
-    #df[['First','Last']] = df.Name.str.split(expand=True)
+    #cite https://www.geeksforgeeks.org/split-a-text-column-into-two-columns-in-pandas-dataframe/
     return count_of_crs
+#call
+healthcr_df = read_data(PATH, 'Chicago_health_cr.csv')
+crs = parse_healthcr(healthcr_df)
+crs['Community Area Number'].dtype
 
 #Merge datasets:
 #updated to have pop -not tested
@@ -99,8 +109,8 @@ def merge_dfs(SES_df,green_df,avg_an_death,count_of_crs, pop):
     SES_green_death = SES_green.merge(avg_an_death, on='Community Area Number', how = 'inner')
 
     #need to update, 'Community Area (#)' is the new column!
-    SES_green_death_healthcr = SES_green_death.merge(count_of_crs, left_on='Community Area Number', 
-                                                     right_on='Community Areas', how = 'outer')
+    SES_green_death_healthcr = SES_green_death.merge(count_of_crs, on='Community Area Number', 
+                                                      how = 'outer')
     SES_green_death_healthcr_pop = SES_green_death_healthcr.merge(pop, on = 'Geo_Group', how = 'outer')
     #fill in Nan with 0 (bc if not in the previous database then doesn't have a health center)
     SES_green_death_healthcr_pop['count_of_health_crs'].fillna(value = 0, inplace=True)
@@ -130,8 +140,8 @@ def drop_col(full_df):
 
 
 #call the download funtion
-for url, filename in URLS:
-    download_data(url, filename)
+#for url, filename in URLS:
+#    download_data(url, filename)
 
 def main():
     df_contents = []
@@ -143,12 +153,12 @@ def main():
             df_contents.append(parse_healthcr(df))
         else:
             df_contents.append(df) 
-    df_contents.append(parse_pop(pop_df))
+    df_contents.append(parse_pop(pop_df, '2011-2015'))
     #call the merge function
-    full_df= merge_dfs(df_contents[0], df_contents[1], df_contents[2], df_contents[3])
+    full_df= merge_dfs(df_contents[0], df_contents[1], df_contents[2], df_contents[3],df_contents[4])
     #call the drop_col function -> generate primary df
     use_df = drop_col(full_df)
-    use_df = re_name(use_df)
+    #use_df = re_name(use_df)
     return use_df
 
 use_df = main()
