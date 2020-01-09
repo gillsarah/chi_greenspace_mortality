@@ -76,7 +76,7 @@ df.columns
 #re-shape df so that numbers reflect average annual deaths
 
 def parse_death(death_df):
-    death_df.rename(columns = {'Community Area': 'Community Area Number'}, inplace=True)
+    #death_df.rename(columns = {'Community Area': 'Community Area Number'}, inplace=True)
     avg_an_death = death_df.pivot(index = 'Community Area Number', columns='Cause of Death', 
                                   values='Average Annual Deaths 2006 - 2010')
     avg_an_death.drop(0, axis = 0, inplace = True) #drop the Chicago Total
@@ -96,13 +96,34 @@ def parse_healthcr(healthcr_df):
     
     #cite https://www.geeksforgeeks.org/split-a-text-column-into-two-columns-in-pandas-dataframe/
     return count_of_crs
-#call
-healthcr_df = read_data(PATH, 'Chicago_health_cr.csv')
-crs = parse_healthcr(healthcr_df)
-crs['Community Area Number'].dtype
 
 #Merge datasets:
 #updated to have pop -not tested
+def merge_dfs(dfs, merge_on):
+    '''
+    takes the list of dfs, order is importaint!
+    cols of interst are Community Area Number and Geo_ID
+    '''
+
+def check_col(df):
+    if 'Geo_ID' in(list(df.columns)):
+        return 'Geo_ID'
+    elif 'Community Area Number' in(list(df.columns)):
+        return 'Community Area Number'
+    else:
+        print('column not found! merge will not be successful')
+
+
+SES_green = SES.merge(green, left_on= check_col(SES), right_on = check_col(green), how = 'inner')
+SES_green.columns
+
+green['Geo_ID'].dtype
+SES['Community Area Number'].dtype
+
+'Geo_ID' in(list(SES.columns))
+'Geo_ID' in(list(green.columns))
+'Community Area Number' in(list(green.columns))
+
 def merge_dfs(SES_df,green_df,avg_an_death,count_of_crs, pop):     
     SES_green = SES_df.merge(green_df, left_on='Community Area Number', right_on = 'Geo_ID', how = 'inner')
 
@@ -120,8 +141,8 @@ def merge_dfs(SES_df,green_df,avg_an_death,count_of_crs, pop):
 
     #drop columns that do not provide useful information/may not apply to all entries in the row after 
     # the merge (e.g. SubCategory or Map_Key from green_df), or duplicates eg Geo_ID
-    SES_green_death_healthcr_pop.drop(columns = ['Geo_Group', 'Geo_ID', 'Category', 'SubCategory',
-                                            'Geography', 'Map_Key'], inplace = True)
+    #SES_green_death_healthcr_pop.drop(columns = ['Geo_Group', 'Geo_ID', 'Category', 'SubCategory',
+    #                                        'Geography', 'Map_Key'], inplace = True)
     return SES_green_death_healthcr_pop 
 
 #cite: https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.DataFrame.fillna.html
@@ -143,6 +164,20 @@ def drop_col(full_df):
 #for url, filename in URLS:
 #    download_data(url, filename)
 
+#call
+SES = read_data(PATH, 'Chicago_SES.csv')
+healthcr_df = read_data(PATH, 'Chicago_health_cr.csv')
+crs = parse_healthcr(healthcr_df)
+#crs['Community Area Number'].dtype
+df = read_data(PATH, 'Chicago_Death.csv')
+death = parse_death(df)
+pop_df = parse_pop(pop_df, '2011-2015')
+
+green = read_data(PATH, 'Chicago_Green.xls')
+
+green.columns 
+death.columns
+
 def main():
     df_contents = []
     for url, filename in URLS:
@@ -157,8 +192,8 @@ def main():
     #call the merge function
     full_df= merge_dfs(df_contents[0], df_contents[1], df_contents[2], df_contents[3],df_contents[4])
     #call the drop_col function -> generate primary df
-    use_df = drop_col(full_df)
+    #use_df = drop_col(full_df)
     #use_df = re_name(use_df)
-    return use_df
+    return full_df
 
 use_df = main()
