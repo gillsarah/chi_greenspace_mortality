@@ -61,9 +61,9 @@ def parse_pop(pop_df, date_range):
    df = pop_df[pop_df['Year'] == date_range]
    return df
 
-df = parse_pop(pop_df, '2011-2015')
+#df = parse_pop(pop_df, '2011-2015')
 
-df.columns
+#df.columns
 #of interest: Geo_Group, Number
 
 
@@ -76,10 +76,11 @@ df.columns
 #re-shape df so that numbers reflect average annual deaths
 
 def parse_death(death_df):
-    #death_df.rename(columns = {'Community Area': 'Community Area Number'}, inplace=True)
+    death_df.rename(columns = {'Community Area': 'Community Area Number'}, inplace=True)
     avg_an_death = death_df.pivot(index = 'Community Area Number', columns='Cause of Death', 
                                   values='Average Annual Deaths 2006 - 2010')
     avg_an_death.drop(0, axis = 0, inplace = True) #drop the Chicago Total
+    avg_an_death.reset_index(inplace = True)
     return avg_an_death
 
 #get a count of healthcare centers per community area:
@@ -97,13 +98,6 @@ def parse_healthcr(healthcr_df):
     #cite https://www.geeksforgeeks.org/split-a-text-column-into-two-columns-in-pandas-dataframe/
     return count_of_crs
 
-#Merge datasets:
-#updated to have pop -not tested
-def merge_dfs(dfs, merge_on):
-    '''
-    takes the list of dfs, order is importaint!
-    cols of interst are Community Area Number and Geo_ID
-    '''
 
 def check_col(df):
     if 'Geo_ID' in(list(df.columns)):
@@ -113,16 +107,45 @@ def check_col(df):
     else:
         print('column not found! merge will not be successful')
 
+'Ave_Annual_Number' in (list(pop_df.columns))
 
-SES_green = SES.merge(green, left_on= check_col(SES), right_on = check_col(green), how = 'inner')
+'''
+#calls: out of order!
+SES_green = SES.merge(green, left_on= check_col(SES), right_on = check_col(green), how = 'outer')
 SES_green.columns
+SES_green.head()
 
 green['Geo_ID'].dtype
 SES['Community Area Number'].dtype
 
-'Geo_ID' in(list(SES.columns))
 'Geo_ID' in(list(green.columns))
-'Community Area Number' in(list(green.columns))
+'Geo_ID' in(list(death.columns))
+'Community Area Number' in(list(death.columns))
+
+death.reset_index(inplace = True)
+SES_green_death = SES_green.merge(death, left_on= check_col(SES_green), right_on = check_col(death), how = 'outer')
+SES_green_death.shape
+
+SES_green_death = SES_green.merge(death, on='Community Area Number', how = 'inner')
+
+SES_green_death_healthcr = SES_green_death.merge(crs, on='Community Area Number', 
+                                                      how = 'outer')
+SES_green_death_healthcr.shape
+summary_stats(SES_green_death_healthcr)
+
+SES_green_death_healthcr_pop = SES_green_death_healthcr.merge(pop_df, on = 'Geo_Group', how = 'inner')
+SES_green_death_healthcr_pop.shape
+
+SES_green_death_healthcr_pop['count_of_health_crs'].fillna(value = 0, inplace=True)
+'''
+ 
+
+def summary_stats(df):
+    summary = df.describe()
+    #summary.drop(columns = ['Community_Area_Number'], inplace = True)
+    summary = summary.transpose()
+    summary = summary.round(2)
+    return summary
 
 def merge_dfs(SES_df,green_df,avg_an_death,count_of_crs, pop):     
     SES_green = SES_df.merge(green_df, left_on='Community Area Number', right_on = 'Geo_ID', how = 'inner')
@@ -132,12 +155,13 @@ def merge_dfs(SES_df,green_df,avg_an_death,count_of_crs, pop):
     #need to update, 'Community Area (#)' is the new column!
     SES_green_death_healthcr = SES_green_death.merge(count_of_crs, on='Community Area Number', 
                                                       how = 'outer')
-    SES_green_death_healthcr_pop = SES_green_death_healthcr.merge(pop, on = 'Geo_Group', how = 'outer')
+    SES_green_death_healthcr_pop = SES_green_death_healthcr.merge(pop, on = 'Geo_Group', how = 'outer', suffixes = ('', '_pop'))
     #fill in Nan with 0 (bc if not in the previous database then doesn't have a health center)
     SES_green_death_healthcr_pop['count_of_health_crs'].fillna(value = 0, inplace=True)
     
     #drop colums with Nan (all cols dropped for this df are completely empty)
-    SES_green_death_healthcr_pop.dropna(axis=1,inplace=True)
+    #no longer true, loseing a lot now
+    #SES_green_death_healthcr_pop.dropna(axis=1,inplace=True)
 
     #drop columns that do not provide useful information/may not apply to all entries in the row after 
     # the merge (e.g. SubCategory or Map_Key from green_df), or duplicates eg Geo_ID
@@ -163,7 +187,7 @@ def drop_col(full_df):
 #call the download funtion
 #for url, filename in URLS:
 #    download_data(url, filename)
-
+'''
 #call
 SES = read_data(PATH, 'Chicago_SES.csv')
 healthcr_df = read_data(PATH, 'Chicago_health_cr.csv')
@@ -178,6 +202,8 @@ green = read_data(PATH, 'Chicago_Green.xls')
 green.columns 
 death.columns
 
+full_df= merge_dfs(SES, green, death, crs, pop_df )
+'''
 def main():
     df_contents = []
     for url, filename in URLS:
@@ -197,3 +223,39 @@ def main():
     return full_df
 
 use_df = main()
+
+
+#use_df = drop_col(use_df)
+def re_name(df):
+    df.rename(columns = {"Ave_Annual_Number": "Ave_Annual_Perc_Green"}, inplace = True)
+    df.columns = [c.split(sep = ' (')[0] for c in df.columns]
+    df.columns = [c.rstrip() for c in df.columns]
+    df.columns = [c.replace(" ", "_") for c in df.columns]
+    df.columns = [c.replace("-", "_") for c in df.columns]
+    df.columns = [c.title() for c in df.columns]
+    return df
+
+use_df = re_name(use_df)
+use_df["Ave_Annual_Number"]
+
+def covt_check(df, y_string, x_string):
+    print(y_string + ' on ' + x_string)
+    test_model = smf.ols(y_string + '~' + x_string , data = df)
+    result = test_model.fit()
+    print(result.summary())
+    print( )
+
+covariate_check_list = [('Ave_Annual_Perc_Green', 'Hardship_Index'), 
+                        ('Ave_Annual_Perc_Green', 'Per_Capita_Income'),
+                        ('Ave_Annual_Perc_Green', 'Percent_Households_Below_Poverty')]
+for i, j in covariate_check_list:
+    covt_check(use_df, i, j)   
+for i, j in covariate_check_list:
+    covt_check(some_green_df, i, j) 
+
+
+
+to_plot = [('Suicide','Average Anual Deaths by Suicide'), 
+                ('Diabetes_Related','Average Anual Diabetes Related Deaths'),
+                ('Coronary_Heart_Disease','Average Anual Deaths from Coronary Heart Disease'),
+                ('Stroke','Average Anual Deaths by Stroke')]
